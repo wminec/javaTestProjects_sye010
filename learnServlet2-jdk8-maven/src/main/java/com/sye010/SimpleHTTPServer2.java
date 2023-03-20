@@ -2,78 +2,79 @@ package com.sye010;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 
-
-public class SimpleHTTPServer2 {
+public class SimpleHTTPServer2 
+{
     private static final int PORT = 8080;
-    public static void main(String[] args) {
-        try {
-            ServerSocket server = new ServerSocket(PORT);
-            System.out.println("MiniServer active " + PORT);
-            while (true) {
-                new ThreadSocket(server.accept());
-            }
-        } catch (Exception e) {
-        }
-    }
-}
+    public static void main( String[] args ) throws IOException
+    {
+        ServerSocket server = new ServerSocket(PORT);
+        System.out.println("Server start with "+ PORT + " Port");
+        while (true) {
+            Socket client = server.accept();
+            try (BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                    PrintWriter out = new PrintWriter(client.getOutputStream())) {
 
-class ThreadSocket extends Thread {
-    private Socket insocket;
-    ThreadSocket(Socket insocket) {
-        this.insocket = insocket;
-        this.start();
-    }
-    @Override
-    public void run() {
-        try {
-            InputStream is = insocket.getInputStream();
-            PrintWriter out = new PrintWriter(insocket.getOutputStream());
-            BufferedReader in = new BufferedReader(new InputStreamReader(is));
-            String line;
-            line = in.readLine();
-            String request_method = line;
-            System.out.println("HTTP-HEADER: " + line);
-            line = "";
-            // looks for post data
-            int postDataI = -1;
-            while ((line = in.readLine()) != null && (line.length() != 0)) {
-                System.out.println("HTTP-HEADER: " + line);
-                if (line.indexOf("Content-Length:") > -1) {
-                    postDataI = new Integer(
-                            line.substring(
-                                    line.indexOf("Content-Length:") + 16,
-                                    line.length())).intValue();
+                        Map<String, String> headers = new HashMap<>();
+ 
+                        String line;
+                        while (!(line = in.readLine()).equals("")) {
+                            System.out.println(line);
+                            setHeaders(headers, line);
+                        }
+                        // if POST
+                        String messageBody = "";
+                        if ("application/x-www-form-urlencoded".equals(headers.get("Content-Type"))) {
+                            messageBody = getMessageBody(in, headers);
+                            System.out.println("Request Message Body ====================>");
+                            System.out.println(messageBody);
+                            System.out.println("====================");
+                        }
+         
+                        out.println("HTTP/1.1 200 OK");
+                        out.println("Content-Type: text/html;charset=UTF-8");
+                        // this blank line signals the end of the headers
+                        out.println();
+                        // Send the HTML page
+                        out.println("<H1>Hello, World!</H2>");
+                        if (messageBody != "") {
+                            out.println("<H3>Post data : " + messageBody + "</H3>");
+                        }
+                        out.println("<form name=\"input\" action=\"form_submited\" method=\"post\">");
+                        out.println("Username: <input type=\"text\" name=\"user\">");
+                        out.println("password : <input type=\"password\" name=\"pass\">");
+                        out.println("<input type=\"submit\" value=\"Submit!\"></form>");
+                        out.flush();
+                    } catch (IOException e){
+                        e.printStackTrace();
+                    }
+                    client.close();
                 }
             }
-            System.out.println("\n");
-            String postData = "";
-            // read the post data
-            if (postDataI > 0) {
-                char[] charArray = new char[postDataI];
-                in.read(charArray, 0, postDataI);
-                postData = new String(charArray);
+         
+         
+            private static void setHeaders(Map<String, String> headers, String line) {
+                String[] parts = line.split(": ");
+                // if line is header 
+                // example : "Host: localhosot:8080"
+                //System.out.println("setHeaders, print line : " + line);
+                if (parts.length == 2) {
+                    headers.put(parts[0], parts[1]);
+                }
             }
-            out.println("HTTP/1.0 200 OK");
-            out.println("Content-Type: text/html; charset=utf-8");
-            out.println("Server: MINISERVER");
-            // this blank line signals the end of the headers
-            out.println("");
-            // Send the HTML page
-            out.println("<H1>Welcome to the Mini Server</H1>");
-            out.println("<H2>Request Method->" + request_method + "</H2>");
-            out.println("<H2>Post->" + postData + "</H2>");
-            out.println("<form name=\"input\" action=\"form_submited\" method=\"post\">");
-            out.println("Username: <input type=\"text\" name=\"user\"><input type=\"submit\" value=\"Submit\"></form>");
-            out.close();
-            insocket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
+         
+            private static String getMessageBody(BufferedReader in, Map<String, String> headers) throws IOException {
+                int contentLength = Integer.parseInt(headers.get("Content-Length"));
+                char[] body = new char[contentLength];
+                in.read(body, 0, contentLength);
+                String messageBody = new String(body);
+         
+                return messageBody;
+            }
 }
